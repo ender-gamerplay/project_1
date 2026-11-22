@@ -1,0 +1,243 @@
+import sys
+import os
+import math
+import wave
+import struct
+import tempfile
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QPushButton,
+    QVBoxLayout, QHBoxLayout, QLabel
+)
+from PyQt6.QtCore import Qt, QUrl, QTimer
+from PyQt6.QtMultimedia import QSoundEffect
+
+
+class SoundGenerator:
+    """Генерирует WAV-файлы заданной частоты во временной директории."""
+    def __init__(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.cache = {}
+
+    def get_note_file(self, freq: float, duration: float = 0.6) -> str:
+        key = (freq, duration)
+        if key in self.cache:
+            return self.cache[key]
+
+        sample_rate = 44100
+        num_samples = int(sample_rate * duration)
+        file_path = os.path.join(self.temp_dir.name, f"note_{freq}_{duration}.wav")
+
+        with wave.open(file_path, 'w') as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(sample_rate)
+
+            frames = bytearray()
+            for i in range(num_samples):
+                t = i / sample_rate
+                # Плавное затухание звука, имитирующее щипок или удар по струне
+                envelope = math.exp(-3.5 * t)
+                # Основной тон + легкая гармоника для более приятного тембра
+                sample = 0.7 * math.sin(2 * math.pi * freq * t) + 0.3 * math.sin(4 * math.pi * freq * t)
+                value = int(32767.0 * 0.5 * envelope * sample)
+                frames.extend(struct.pack('<h', value))
+
+            wav_file.writeframes(frames)
+
+        self.cache[key] = file_path
+        return file_path
+
+
+class PianoWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Фортепиано на PyQt6 8000")
+        self.setFixedSize(760, 400)
+
+        self.sound_gen = SoundGenerator()
+        self.active_sounds = []  # Храним ссылки, чтобы сборщик мусора не прерывал звук
+
+        # Частоты нот (первая и вторая октавы)
+        self.notes = {
+            "До (C4)": 261.63,
+            "До# (C#4)": 277.18,
+            "Ре (D4)": 293.66,
+            "Ре# (D#4)": 311.13,
+            "Ми (E4)": 329.63,
+            "Фа (F4)": 349.23,
+            "Фа# (F#4)": 369.99,
+            "Соль (G4)": 392.00,
+            "Соль# (G#4)": 415.30,
+            "Ля (A4)": 440.00,
+            "Ля# (A#4)": 466.16,
+            "Си (B4)": 493.88,
+            "До (C5)": 523.25
+        }
+
+        # Привязка клавиш компьютерной клавиатуры
+        self.key_map = {
+            Qt.Key.Key_A: "До (C4)",
+            Qt.Key.Key_W: "До# (C#4)",
+            Qt.Key.Key_S: "Ре (D4)",
+            Qt.Key.Key_E: "Ре# (D#4)",
+            Qt.Key.Key_D: "Ми (E4)",
+            Qt.Key.Key_F: "Фа (F4)",
+            Qt.Key.Key_T: "Фа# (F#4)",
+            Qt.Key.Key_G: "Соль (G4)",
+            Qt.Key.Key_Y: "Соль# (G#4)",
+            Qt.Key.Key_H: "Ля (A4)",
+            Qt.Key.Key_U: "Ля# (A#4)",
+            Qt.Key.Key_J: "Си (B4)",
+            Qt.Key.Key_K: "До (C5)",
+        }
+
+        self.init_ui()
+
+    def init_ui(self):
+        central_widget = QWidget(self)
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+
+        # Информационная панель
+        self.info_label = QLabel("Нажимайте на клавиши мышью или используйте клавиатуру (A, W, S, E, D, F, T, G, Y, H, U, J, K)")
+        self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.info_label.setStyleSheet("font-size: 13px; color: #333; margin-bottom: 5px;")
+        main_layout.addWidget(self.info_label)
+
+        # Панель с кнопками готовых мелодий
+        #melody_layout = QHBoxLayout()
+        
+        #btn_melody1 = QPushButton("▶ Мелодия 1: В лесу родилась ёлочка")
+        #btn_melody1.setStyleSheet("padding: 8px; font-weight: bold; background-color: #e3f2fd;")
+        #btn_melody1.clicked.connect(self.play_christmas_tree)
+
+        #btn_melody2 = QPushButton("▶ Мелодия 2: К Элизе (фрагмент)")
+        #btn_melody2.setStyleSheet("padding: 8px; font-weight: bold; background-color: #e8f5e9;")
+        #btn_melody2.clicked.connect(self.play_fur_elise)
+
+        #melody_layout.addWidget(btn_melody1)
+        #melody_layout.addWidget(btn_melody2)
+        #main_layout.addLayout(melody_layout)
+
+        # Контейнер для клавиатуры пианино
+        piano_container = QWidget()
+        piano_container.setFixedHeight(270)
+        main_layout.addWidget(piano_container)
+
+        # Белые клавиши
+        white_notes = [
+            ("До (C4)", "A"), ("Ре (D4)", "S"), ("Ми (E4)", "D"),
+            ("Фа (F4)", "F"), ("Соль (G4)", "G"), ("Ля (A4)", "H"),
+            ("Си (B4)", "J"), ("До (C5)", "K")
+        ]
+
+        white_width = 88
+        white_height = 250
+        start_x = 18
+
+        for i, (note_name, shortcut) in enumerate(white_notes):
+            btn = QPushButton(f"{note_name.split()[0]}\n[{shortcut}]", piano_container)
+            btn.setGeometry(start_x + i * white_width, 10, white_width - 2, white_height)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: white;
+                    color: black;
+                    border: 1px solid #888;
+                    border-bottom-left-radius: 6px;
+                    border-bottom-right-radius: 6px;
+                    padding-top: 170px;
+                    font-weight: bold;
+                }
+                QPushButton:pressed {
+                    background-color: #dcdcdc;
+                }
+            """)
+            btn.pressed.connect(lambda n=note_name: self.play_note(n))
+
+        # Чёрные клавиши (позиционируются поверх белых)
+        black_notes = [
+            ("До# (C#4)", "W", 0),
+            ("Ре# (D#4)", "E", 1),
+            ("Фа# (F#4)", "T", 3),
+            ("Соль# (G#4)", "Y", 4),
+            ("Ля# (A#4)", "U", 5),
+        ]
+
+        black_width = 52
+        black_height = 155
+
+        for note_name, shortcut, white_index in black_notes:
+            x_pos = start_x + (white_index + 1) * white_width - (black_width // 2)
+            btn = QPushButton(f"{note_name.split()[0]}\n[{shortcut}]", piano_container)
+            btn.setGeometry(x_pos, 10, black_width, black_height)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #222;
+                    color: white;
+                    border: 1px solid #000;
+                    border-bottom-left-radius: 5px;
+                    border-bottom-right-radius: 5px;
+                    padding-top: 90px;
+                    font-size: 11px;
+                }
+                QPushButton:pressed {
+                    background-color: #555;
+                }
+            """)
+            btn.pressed.connect(lambda n=note_name: self.play_note(n))
+            btn.raise_()  # Выводим чёрную клавишу на передний план
+
+    def play_note(self, note_name: str, duration: float = 0.6):
+        """Воспроизводит одну ноту."""
+        freq = self.notes.get(note_name)
+        if not freq:
+            return
+
+        wav_path = self.sound_gen.get_note_file(freq, duration)
+        sound = QSoundEffect(self)
+        sound.setSource(QUrl.fromLocalFile(wav_path))
+        sound.setVolume(0.8)
+        sound.play()
+
+        self.active_sounds.append(sound)
+        if len(self.active_sounds) > 20:
+            self.active_sounds.pop(0)
+
+    def play_sequence(self, sequence: list):
+        """Воспроизводит список нот с задержками (мелодию)."""
+        delay_ms = 0
+        for note_name, duration_sec in sequence:
+            QTimer.singleShot(delay_ms, lambda n=note_name, d=duration_sec: self.play_note(n, d))
+            delay_ms += int(duration_sec * 1000)
+
+    def play_christmas_tree(self):
+        melody = [
+            ("До (C4)", 0.4), ("Ля (A4)", 0.4), ("Ля (A4)", 0.4), ("Соль (G4)", 0.4),
+            ("Ля (A4)", 0.4), ("Фа (F4)", 0.4), ("До (C4)", 0.4), ("До (C4)", 0.4),
+            ("До (C4)", 0.4), ("Ля (A4)", 0.4), ("Ля (A4)", 0.4), ("Ля# (A#4)", 0.4),
+            ("Соль (G4)", 0.4), ("До (C5)", 0.8)
+        ]
+        self.play_sequence(melody)
+
+    def play_fur_elise(self):
+        melody = [
+            ("Ми (E4)", 0.25), ("Ре# (D#4)", 0.25), ("Ми (E4)", 0.25), ("Ре# (D#4)", 0.25),
+            ("Ми (E4)", 0.25), ("Си (B4)", 0.25), ("Ре (D4)", 0.25), ("До (C4)", 0.25),
+            ("Ля (A4)", 0.6)
+        ]
+        self.play_sequence(melody)
+
+    def keyPressEvent(self, event):
+        """Обработка нажатий физической клавиатуры."""
+        if not event.isAutoRepeat():
+            note_name = self.key_map.get(event.key())
+            if note_name:
+                self.play_note(note_name)
+        super().keyPressEvent(event)
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = PianoWindow()
+    window.show()
+    sys.exit(app.exec())
