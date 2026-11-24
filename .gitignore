@@ -1,3 +1,14 @@
+classes (1).py
+classes copy.py
+films_bd.sqlite
+GoldenJuggernautBase.png
+out.txt
+films_db.sqlite
+the_first.py
+the_fourth.py
+the_second.py
+the_third
+#git rm --cache
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
