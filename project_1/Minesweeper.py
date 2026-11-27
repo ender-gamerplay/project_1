@@ -332,7 +332,7 @@ class Minesweeper(QMainWindow, Ui_MainWindow):
         if file_path:
             self.player.setSource(QUrl.fromLocalFile(file_path))
             self.player.play()
-            self.toggle_music_action.setEnabled(True)
+            self.action_music_toggle.setEnabled(True)
 
     def toggle_music(self):
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -343,7 +343,7 @@ class Minesweeper(QMainWindow, Ui_MainWindow):
     def stop_music(self):
         self.player.stop()
         self.player.setSource(QUrl())
-        self.toggle_music_action.setEnabled(False)
+        self.action_music_toggle.setEnabled(True)
 
     def load_limbo_music(self):
         file_filter = "Аудиофайлы (*.mp3 *.wav *.ogg *.flac)"
@@ -384,8 +384,7 @@ class Minesweeper(QMainWindow, Ui_MainWindow):
                 self.player.setSource(target_url)
             
             self.player.play()
-            self.toggle_music_action.setEnabled(True)
-
+            self.action_music_toggle.setEnabled(True)
 
 
         self.is_limbo_mode = True
